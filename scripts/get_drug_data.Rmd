@@ -1,0 +1,38 @@
+---
+title: "DGIdb data collection and processing"
+output: html_document
+date: "2024-10-10"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+### Input: Downloaded data files from DGIdb
+### Output: Clean and processed data that can be used for training DGIdb
+
+import libraries
+```{r}
+library(tidyverse)
+```
+
+# Step 1: read data
+```{r}
+# drug interaction data (contains genes and drugs they interact with)
+dgidb_interactions <- read_tsv("../data/raw/interactions.tsv")
+
+# genes and potential actions/characteristics they have ex. lipase, 
+# cell surface, tumor suppressor etc
+dgidb_categories <- read_tsv("../data/raw/categories.tsv")
+
+# contains only drug information
+dgidb_drugs <- read_tsv("../data/raw/drugs.tsv")
+
+# contains only gene information
+dgid_genes <- read_tsv("../data/raw/genes.tsv")
+```
+
+```{r}
+
+```
+
