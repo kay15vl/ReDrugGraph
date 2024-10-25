@@ -14,11 +14,15 @@ knitr::opts_chunk$set(echo = FALSE)
 import libraries
 ```{r}
 library(tidyverse)
+library(mygene)
+library(httr)
+library(jsonlite)
 ```
 
 # Step 1: read data
 ```{r}
 # drug interaction data (contains genes and drugs they interact with)
+# THIS IS THE DATA I WILL BE USING
 dgidb_interactions <- read_tsv("../data/raw/interactions.tsv")
 
 # genes and potential actions/characteristics they have ex. lipase, 
@@ -32,7 +36,176 @@ dgidb_drugs <- read_tsv("../data/raw/drugs.tsv")
 dgid_genes <- read_tsv("../data/raw/genes.tsv")
 ```
 
+# Step 2: Explore data
+
 ```{r}
+# CHECK FOR NAS
+print(any(is.na(dgidb_interactions))) #there are NAs and NULLS
+
+# check dimensions
+print(dim(dgidb_interactions)) #98239 rows and 13 columns
+
+#check columnames and their datatypes
+print(colnames(dgidb_interactions))
+print(str(dgidb_interactions))
+```
+
+```{r}
+dgidb_interactions
+
+# plot how many of these drugs are approved?
+approved_drugs <- dgidb_interactions %>%
+  group_by(approved) %>%
+  summarize(count = n())
+
+ggplot(approved_drugs, aes(x = approved, y = count)) + geom_bar(stat = "identity", fill = c("red", "gray", "forestgreen")) + labs(title = "Number of FDA approved drugs vs Not approved", x = "Approval Status", y = "Count") +
+  theme_minimal() + geom_text(aes(label = count), vjust = -0.5) + scale_x_discrete(labels = c("FALSE" = "Not Approved", "NULL" = "NULL/NA", "TRUE" = "Approved"))
 
 ```
+
+
+
+# Step 3: Map entrez gene ids to the gene numbers in original df
+```{r}
+# get rid of unnecessary columns and get rid of nas
+new_dgidb_inter <- dgidb_interactions %>% filter(gene_name!= 'NULL') %>% dplyr::select(-gene_claim_name,-interaction_source_db_name:-interaction_type, -immunotherapy,-anti_neoplastic) %>% filter(!is.na(gene_name))
+
+# split gene-concept-id into 2 columns to map entrez ids
+new_dgidb_inter <- new_dgidb_inter %>% 
+  separate(gene_concept_id, c("gene_id_type", "gene_num"), ":")
+
+# map entrez to gene identifier types
+# define function
+map_id <- function(map_genes, geneid_type) {
+  getGenes(map_genes, scopes = geneid_type,
+           fields = c("entrezgene", "symbol"), species = "human")
+}
+
+# split up gene id types so entrez ids can be mapped to them
+dgidb_hgnc_dat <- new_dgidb_inter %>% filter(gene_id_type == "hgnc")
+get_hgnc_list <- as.list(dgidb_hgnc_dat$gene_num)
+
+# get entrez mappings for hgnc genes
+mapped_hgnc <- as_tibble(map_id(get_hgnc_list,"hgnc"))
+
+# now do the same for ensemble ids
+dgidb_ensemble_dat <- new_dgidb_inter %>% filter(gene_id_type == "ensembl")
+
+get_ensembl_list <- as.list(dgidb_ensemble_dat$gene_num)
+mapped_ensembl <- as_tibble(map_id(get_ensembl_list, "ensembl.gene"))
+
+# now do the same for the ncbi
+dgidb_ncbi_dat <- new_dgidb_inter %>% filter(gene_id_type=="ncbigene")
+get_ncbigene_list <- as.list(dgidb_ncbi_dat$gene_num)
+
+mapped_ncbigene <- as_tibble(map_id(get_ncbigene_list,"entrezgene"))
+
+#create function that cleans the mygene mapping query
+clean_mygene <- function(mygene_results){  
+  final_mygene <- mygene_results %>% dplyr::rename(gene_num = query, mygene_symbol=symbol ) %>% filter(!is.na(entrezgene)) %>% dplyr::select(-X_id,-X_version,-notfound)
+  
+  return(final_mygene)
+}
+
+new_mygene_ncbi <- clean_mygene(mapped_ncbigene)
+new_mygene_hgnc <- clean_mygene(mapped_hgnc)
+new_mygene_ensembl <- mapped_ensembl %>% dplyr::rename(gene_num = query, mygene_symbol=symbol ) %>% filter(!is.na(entrezgene)) %>% dplyr::select(-X_id,-X_version)
+
+new_mygene_ensembl
+new_mygene_hgnc
+new_mygene_ncbi
+```
+
+
+# Step 4: Join the entrez gene ids to the original dfs and get rid of extra columns
+```{r}
+entrez_ensemble <- dgidb_ensemble_dat %>% inner_join(new_mygene_ensembl, by = "gene_num") %>% dplyr::select(-gene_id_type:-gene_name) %>% 
+  relocate(c("entrezgene","mygene_symbol"), .before ="interaction_score") %>% 
+  relocate(c("drug_claim_name", "drug_concept_id", "drug_name"), .after = "mygene_symbol")
+
+# check to see if gene name and mygene symbol match. 
+print(identical(entrez_ensemble$gene_name, entrez_ensemble$mygene_symbol))
+
+entrez_hgnc <- dgidb_hgnc_dat %>% inner_join(new_mygene_hgnc, by = "gene_num") %>% distinct() %>% dplyr::select(-gene_id_type:-gene_name) %>% 
+  relocate(c("entrezgene","mygene_symbol"), .before ="interaction_score") %>% 
+  relocate(c("drug_claim_name", "drug_concept_id", "drug_name"), .after = "mygene_symbol")
+
+# did not match here. Gene names in original data do not match the ones caputured in the mygene query. Will be sticking to mygene query.
+print(identical(entrez_hgnc$gene_name, entrez_hgnc$mygene_symbol)) 
+
+entrez_ncbi <- dgidb_ncbi_dat %>% inner_join(new_mygene_ncbi, by= "gene_num") %>% distinct() %>% dplyr::select(-gene_id_type:-gene_name) %>% 
+  relocate(c("entrezgene","mygene_symbol"), .before ="interaction_score") %>% 
+  relocate(c("drug_claim_name", "drug_concept_id", "drug_name"), .after = "mygene_symbol")
+
+# did not match here. Gene names in original data do not match the ones caputured in the mygene query. Will be sticking to mygene query.
+print(identical(entrez_ncbi$gene_name, entrez_ncbi$mygene_symbol)) 
+
+# combine all these data frames into one
+
+new_genemapped_drugdata <- rbind(entrez_ensemble, entrez_hgnc, entrez_ncbi)
+new_genemapped_drugdata
+```
+
+# Step 5: Map Pubchem ids to the drug ids in original data
+```{r}
+#filter out each type of drug id into their own df
+
+# get rid of any rows with NULL values and separate drug concept id into two columns
+drugid_process <- new_genemapped_drugdata %>% filter(drug_concept_id!="NULL") %>% 
+  separate(drug_concept_id, c("drug_id_type", "drug_num"), ":")
+drugid_process
+
+```
+
+### Look at the different drug ids
+```{r}
+table(drugid_process$drug_id_type)
+```
+
+### Develop funciton that will map a common drug id to all the ids in data frame
+```{r}
+
+
+# Function to query UniChem for each drug ID
+map_drug_id <- function(drug_id, src_id, target_id) {
+  # Construct API URL
+  url <- paste0("https://www.ebi.ac.uk/unichem/rest/src_compound_id/", drug_id, "/", src_id, "/", target_id)
+  
+  # Make the API request
+  response <- GET(url)
+  
+  # Check for a successful response
+  if (status_code(response) == 200) {
+    # Parse JSON content
+    data <- content(response, "text", encoding = "UTF-8")
+    json_data <- fromJSON(data)
+    
+    # Extract the target ID, or return NA if not found
+    if (length(json_data) > 0) {
+      return(json_data$`src_compound_id`[1])
+    } else {
+      return(NA)
+    }
+  } else {
+    warning("Failed to retrieve data for drug ID: ", drug_id)
+    return(NA)
+  }
+}
+
+```
+
+
+### Filter df by drug id and map
+```{r}
+# drug_id, src_id, target_id
+drugbank_df <- drugid_process %>% filter(drug_id_type == 'drugbank')
+drugbank_ids <- as.list(drugbank_df$drug_num)
+drug_to_chembl <-  sapply('DB04459',map_drug_id, 2, 1)
+
+```
+
+
+
+
+
 
