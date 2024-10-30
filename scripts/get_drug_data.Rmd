@@ -162,47 +162,341 @@ drugid_process
 table(drugid_process$drug_id_type)
 ```
 
-### Develop funciton that will map a common drug id to all the ids in data frame
+### Develop function that will map a common drug id to all the ids in data frame
 ```{r}
-
-
-# Function to query UniChem for each drug ID
-map_drug_id <- function(drug_id, src_id, target_id) {
-  # Construct API URL
-  url <- paste0("https://www.ebi.ac.uk/unichem/rest/src_compound_id/", drug_id, "/", src_id, "/", target_id)
-  
-  # Make the API request
-  response <- GET(url)
-  
-  # Check for a successful response
-  if (status_code(response) == 200) {
-    # Parse JSON content
-    data <- content(response, "text", encoding = "UTF-8")
-    json_data <- fromJSON(data)
-    
-    # Extract the target ID, or return NA if not found
-    if (length(json_data) > 0) {
-      return(json_data$`src_compound_id`[1])
-    } else {
-      return(NA)
-    }
-  } else {
-    warning("Failed to retrieve data for drug ID: ", drug_id)
-    return(NA)
-  }
+split_into_chunks <- function(vec, chunk_size) {
+  split(vec, ceiling(seq_along(vec) / chunk_size))
 }
 
+# Function to query UniChem for each drug ID
+map_drug_id <- function(drug_id,  source_id) {
+  # Make the API request
+  headers = c(
+    accept = "application/json",
+    `Content-Type` = "application/json"
+  )
+  
+  data <- paste0(
+  '{ "compound": "', drug_id, '", ',
+  '"sourceID": ', source_id, ', ',
+  '"type": "sourceID"}'
+)
+
+  
+  res <- httr::POST(url = "https://www.ebi.ac.uk/unichem/api/v1/connectivity", httr::add_headers(.headers=headers), body = data)
+  parsed_response <- content(res, as = "parsed", type = "application/json")
+  
+  # Extract ChEMBL IDs from the response
+  chembl_ids <- unlist(lapply(parsed_response$sources, function(source) {
+    if (source$longName[[1]] == "ChEMBL") {
+      return(source$compoundId[[1]])
+    }
+    return(NULL)
+  }))
+
+  # Create a data frame with source ID and ChEMBL IDs
+  if (length(chembl_ids) > 0) {
+    df <- data.frame(
+      source_id = rep(drug_id, length(chembl_ids)),
+      target_id = chembl_ids,
+      stringsAsFactors = FALSE
+    )
+  } else {
+    df <- data.frame(
+      source_id = drug_id,
+      target_id = NA,
+      stringsAsFactors = FALSE
+    )
+  }
+
+  return(df)
+}
+
+
+
 ```
 
 
-### Filter df by drug id and map
+### Filter df by drug id and map drug id
 ```{r}
+
+
+# Function to process drug IDs in chunks of 50
+process_drug_ids <- function(drug_ids, source_id, chunk_size = 20) {
+  # Split drug IDs into chunks of 50
+  drug_chunks <- split_into_chunks(drug_ids, chunk_size)
+  total_chunks <- length(drug_chunks)
+
+  # Initialize an empty data frame to collect results
+  final_df <- data.frame()
+
+  # Create a progress bar
+  pb <- txtProgressBar(min = 0, max = total_chunks, style = 3)
+
+  # Start timer
+  start_time <- Sys.time()
+
+  # Iterate over each chunk and process
+  for (i in seq_along(drug_chunks)) {
+    chunk <- drug_chunks[[i]]
+
+    # Use lapply to call the map_drug_id function for each drug ID in the chunk
+    results_list <- lapply(chunk, function(drug_id) map_drug_id(drug_id, source_id))
+
+    # Combine the individual data frames into one
+    chunk_df <- bind_rows(results_list)
+
+    # Append to the final data frame
+    final_df <- bind_rows(final_df, chunk_df)
+
+    # Update the progress bar
+    setTxtProgressBar(pb, i)
+  }
+
+  # Close the progress bar
+  close(pb)
+
+  # Calculate total elapsed time
+  total_time <- Sys.time() - start_time
+
+  # Display total elapsed time
+  cat("\nTotal processing time:", round(total_time, 2), "seconds\n")
+
+  return(final_df)
+}
+
 # drug_id, src_id, target_id
+
+#TEST with these ids#
+drug_ids <- c('DB04459', 'DB01002', 'DB00316', 'DB00150', 'DB00201')
+
+
+```
+
+### Process drug bank drug ids
+```{r}
 drugbank_df <- drugid_process %>% filter(drug_id_type == 'drugbank')
 drugbank_ids <- as.list(drugbank_df$drug_num)
-drug_to_chembl <-  sapply('DB04459',map_drug_id, 2, 1)
+drugdb_to_chembl <-  process_drug_ids(drugbank_ids, "2")
+drugdb_to_chembl
+save(drugdb_to_chembl, file ="../data/raw/drugbank_mapping.RData") 
+
+  
+```
+
+
+### Process iuphar
+```{r}
+iuphar_df <- drugid_process %>% filter(drug_id_type == 'iuphar.ligand')
+iuphar_ids <- as.list(iuphar_df$drug_num)
+iuphar_to_chembl <- process_drug_ids(iuphar_ids, "4")
+iuphar_to_chembl
+save(drugdb_to_chembl, file ="../data/raw/iuphar_mapping.RData") 
+```
+
+```{r}
 
 ```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
