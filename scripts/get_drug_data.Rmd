@@ -126,7 +126,7 @@ entrez_ensemble <- dgidb_ensemble_dat %>% inner_join(new_mygene_ensembl, by = "g
 # check to see if gene name and mygene symbol match. 
 print(identical(entrez_ensemble$gene_name, entrez_ensemble$mygene_symbol))
 
-entrez_hgnc <- dgidb_hgnc_dat %>% inner_join(new_mygene_hgnc, by = "gene_num") %>% distinct() %>% dplyr::select(-gene_id_type:-gene_name) %>% 
+entrez_hgnc <- dgidb_hgnc_dat %>% inner_join(new_mygene_hgnc, by = "gene_num") %>% distinct(.keep_all = TRUE) %>% dplyr::select(-gene_id_type:-gene_name) %>% 
   relocate(c("entrezgene","mygene_symbol"), .before ="interaction_score") %>% 
   relocate(c("drug_claim_name", "drug_concept_id", "drug_name"), .after = "mygene_symbol")
 
@@ -146,14 +146,19 @@ new_genemapped_drugdata <- rbind(entrez_ensemble, entrez_hgnc, entrez_ncbi)
 new_genemapped_drugdata
 ```
 
-# Step 5: Map Pubchem ids to the drug ids in original data
+# Step 5: Map Chembl ids to the drug ids in original data
 ```{r}
 #filter out each type of drug id into their own df
 
+# add info that shows where the drug info was obtained
+drug_source_info <- dgidb_drugs %>% dplyr::select(concept_id, source_db_name) %>% 
+  dplyr::rename(drug_concept_id = concept_id)
 # get rid of any rows with NULL values and separate drug concept id into two columns
-drugid_process <- new_genemapped_drugdata %>% filter(drug_concept_id!="NULL") %>% 
-  separate(drug_concept_id, c("drug_id_type", "drug_num"), ":")
+drugid_process <- new_genemapped_drugdata %>% inner_join(drug_source_info, by= "drug_concept_id") %>% 
+  filter(drug_concept_id!="NULL") %>% separate(drug_concept_id, c("drug_id_type", "drug_num"), ":")
 drugid_process
+
+
 
 ```
 
@@ -161,6 +166,12 @@ drugid_process
 ```{r}
 table(drugid_process$drug_id_type)
 ```
+
+```{r}
+table(drugid_process$source_db_name)
+```
+
+
 
 ### Develop function that will map a common drug id to all the ids in data frame
 ```{r}
@@ -275,14 +286,26 @@ drug_ids <- c('DB04459', 'DB01002', 'DB00316', 'DB00150', 'DB00201')
 
 ### Process drug bank drug ids
 ```{r}
-drugbank_df <- drugid_process %>% filter(drug_id_type == 'drugbank')
-drugbank_ids <- as.list(drugbank_df$drug_num)
-drugdb_to_chembl <-  process_drug_ids(drugbank_ids, "2")
-drugdb_to_chembl
-save(drugdb_to_chembl, file ="../data/raw/drugbank_mapping.RData") 
 
+df <- drugid_process
+drug_id_type <- "drugbank"
+source_num <- "2"
+filename <- "rugbank_mapping.RData"
+map_chembl <- function(df, drug_id_type, source_num, filename){
+  druginfo_df <- drugid_process %>% filter(drug_id_type == drug_id_type)
+  drug_ids <- as.list(druginfo_df$drug_num)
+  olddrug_to_newdrug_id <-  process_drug_ids(drug_ids, source_num)
+  save(olddrug_to_newdrug_id, file = filename) 
   
+}
+
 ```
+
+
+```{r}
+drugbank_df <- map_chembl(drugid_process, "drugbank", "2", "drugbank_mapping.RData")
+```
+
 
 
 ### Process iuphar
