@@ -337,7 +337,7 @@ iuphar_to_chembl <- map_newdrug_id(drugid_process, "iuphar.ligand", "4", "../dat
 ```
 
 ```{r}
-rxcui_to_chembl <- map_newdrug_id(drugid_process, "rxcui", "47", "../data/raw/iuphar_mapping.RData")
+rxcui_to_chembl <- map_newdrug_id(drugid_process, "rxcui", "47", "../data/raw/rxcui_mapping.RData")
 ```
 
 
