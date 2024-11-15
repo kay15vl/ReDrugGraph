@@ -251,7 +251,7 @@ map_drug_id <- function(drug_id,  source_id) {
 
 
 # Function to process drug IDs in chunks of 50
-process_drug_ids <- function(drug_ids, source_id, chunk_size = 10) {
+process_drug_ids <- function(drug_ids, source_id, chunk_size = 50) {
   # Split drug IDs into chunks of 50
   drug_chunks <- split_into_chunks(drug_ids, chunk_size)
   total_chunks <- length(drug_chunks)
