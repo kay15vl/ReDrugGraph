@@ -15,6 +15,7 @@ import libraries
 ```{r}
 library(tidyverse)
 library(mygene)
+library(parallel)
 library(httr)
 library(jsonlite)
 ```
@@ -173,8 +174,8 @@ drug_source_info <- dgidb_drugs %>% dplyr::select(concept_id, source_db_name) %>
   dplyr::rename(drug_concept_id = concept_id)
 # get rid of any rows with NULL values and separate drug concept id into two columns
 drugid_process <- new_genemapped_drugdata %>% inner_join(drug_source_info, by= "drug_concept_id") %>% 
-  filter(drug_concept_id!="NULL") %>% separate(drug_concept_id, c("drug_id_type", "drug_num"), ":")
-drugid_process
+  filter(drug_concept_id!="NULL") %>% separate(drug_concept_id, c("drug_id_type", "drug_num"), ":") %>% distinct()
+drugid_process 
 
 
 
@@ -301,8 +302,6 @@ process_drug_ids <- function(drug_ids, source_id, chunk_size = 50) {
 
 # drug_id, src_id, target_id
 
-#TEST with these ids#
-drug_ids <- c('DB04459', 'DB01002', 'DB00316', 'DB00150', 'DB00201')
 
 
 ```
@@ -310,35 +309,97 @@ drug_ids <- c('DB04459', 'DB01002', 'DB00316', 'DB00150', 'DB00201')
 ### Process drug bank drug ids
 ```{r}
 
-# df <- drugid_process
-# drug_type <- "drugbank"
-# source_num <- "2"
-# filename <- "rugbank_mapping.RData"
-map_newdrug_id <- function(df, drug_type, source_num, filename){
-  druginfo_df <- drugid_process %>% filter(drug_id_type == drug_type)
+df <- drugid_process
+drug_type <- "rxcui"
+source_num <- "47"
+filename <- "test.RData"
+map_newdrug_id <- function(df, drug_type, source_num){
+  druginfo_df <- df %>% filter(drug_id_type == drug_type)
   drug_ids <- as.list(druginfo_df$drug_num)
   olddrug_to_newdrug_id <-  process_drug_ids(drug_ids, source_num)
-  save(olddrug_to_newdrug_id, file = filename) 
 }
 
 ```
 
 
 ```{r}
-drugbank_df <- map_newdrug_id(drugid_process, "drugbank", "2", "../data/raw/drugbank_mapping.RData")
+#drugbank_df <- map_newdrug_id(drugid_process, "drugbank", "2", "../data/raw/drugbank_mapping.RData")
 ```
 
 
 
 ### Process iuphar
 ```{r}
-iuphar_to_chembl <- map_newdrug_id(drugid_process, "iuphar.ligand", "4", "../data/raw/iuphar_mapping.RData")
+#iuphar_to_chembl <- map_newdrug_id(drugid_process, "iuphar.ligand", "4", "../data/raw/iuphar_mapping.RData")
 
 ```
 
 ```{r}
-rxcui_to_chembl <- map_newdrug_id(drugid_process, "rxcui", "47", "../data/raw/rxcui_mapping.RData")
+rxcui_to_chembl <- map_newdrug_id(drugid_process, "rxcui", "47", )
+save(rxcui_to_chembl, file = "../data/raw/rxcui_mapping.RData") 
 ```
+
+
+```{r}
+get_rxcui <- drugid_process %>% filter(drug_id_type== "rxcui")
+
+split_dataframe <- function(df, chunk_size) {
+  # Create a grouping factor based on row numbers
+  num_rows <- nrow(df)
+  group <- ceiling(seq_len(num_rows) / chunk_size)
+  
+  # Split the dataframe into a list of smaller dataframes
+  split_list <- split(df, group)
+  
+  return(split_list)
+}
+
+split_rxcui <- split_dataframe(get_rxcui, 10)
+
+# Use mclapply to apply the function in parallel
+rxcui_results <- list()
+
+# trial_rxcui_results <- list()
+# 
+# for (i in seq_len(min(3, length(split_rxcui)))) {
+#   cat("Processing split_rxcui index:", i, "\n")
+#   cat("Structure of split_rxcui[[", i, "]]:\n")
+#   str(split_rxcui[[i]])
+# 
+#   # Call the function
+#   split_rxcui_df <- as.data.frame(split_rxcui[[i]])
+#   result <- map_newdrug_id(split_rxcui_df, "rxcui", "47")
+# 
+#   # Check the result and add to the list
+#   if (!is.null(result)) {
+#     trial_rxcui_results[[length(trial_rxcui_results) + 1]] <- result
+#   } else {
+#     cat("Result is NULL for index:", i, "\n")
+#   }
+# }
+# 
+# # Combine results
+# trial_final_result <- do.call(rbind, trial_rxcui_results)
+# print(trial_final_result)
+
+
+# Process each smaller dataframe using a loop
+for (i in seq_along(split_rxcui)) {
+  # Apply the function to the current dataframe
+  rxcui_results[[i]] <- map_newdrug_id(split_rxcui[[i]],"rxcui", "47")
+}
+
+# Combine the results if needed (optional, depends on function output)
+final_result <- do.call(rbind, rxcui_results)
+
+
+
+```
+
+```{r}
+
+```
+
 
 
 
