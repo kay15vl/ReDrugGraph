@@ -352,184 +352,53 @@ save(iuphar_to_chembl, file = "../data/raw/iuphar_mapping.RData")
 # save(rxcui_to_chembl, file = "../data/raw/rxcui_mapping.RData") 
 ```
 
-# Step 6: combine mapped drug data into one data frame and save as tsv
+# Step 6: clean up chembel mappinngs df to get it "join" ready and map the chembl ids to the available original drug ids
 ```{r}
+# can upload the Rdata files to combine them if you do not run this whole script
+# load("../data/raw/iuphar_mapping.RData")
+# load("../data/raw/drugbank_mapping.RData")
 
+# get rid of any NAs because this means there were no Chembl ids mapped to the drugbank ids
+drugbank_to_chembl <- drugbank_to_chembl %>% na.omit(target_id) %>% dplyr::rename(drug_num= source_id, chembl_drugid= target_id)
+
+# do the same for the iuphar ids
+iuphar_to_chembl <- iuphar_to_chembl %>% na.omit(target_id) %>% dplyr::rename(drug_num= source_id, chembl_drugid= target_id)
+# do any(is.na(iuphar_to_chembl) and any(is.na(drugbank_to_chembl in console to verfiy there are no Nas in df
 
 ```
 
-
-
-
-
-
-##### Still in progress below this heading ######
-
-```{r}
-get_rxcui <- drugid_process %>% filter(drug_id_type== "rxcui")
-
-split_dataframe <- function(df, chunk_size) {
-  # Create a grouping factor based on row numbers
-  num_rows <- nrow(df)
-  group <- ceiling(seq_len(num_rows) / chunk_size)
-  
-  # Split the dataframe into a list of smaller dataframes
-  split_list <- split(df, group)
-  
-  return(split_list)
-}
-
-split_rxcui <- split_dataframe(get_rxcui, 10)
-
-# Use mclapply to apply the function in parallel
-rxcui_results <- list()
-
-# trial_rxcui_results <- list()
-# 
-# for (i in seq_len(min(3, length(split_rxcui)))) {
-#   cat("Processing split_rxcui index:", i, "\n")
-#   cat("Structure of split_rxcui[[", i, "]]:\n")
-#   str(split_rxcui[[i]])
-# 
-#   # Call the function
-#   split_rxcui_df <- as.data.frame(split_rxcui[[i]])
-#   result <- map_newdrug_id(split_rxcui_df, "rxcui", "47")
-# 
-#   # Check the result and add to the list
-#   if (!is.null(result)) {
-#     trial_rxcui_results[[length(trial_rxcui_results) + 1]] <- result
-#   } else {
-#     cat("Result is NULL for index:", i, "\n")
-#   }
-# }
-# 
-# # Combine results
-# trial_final_result <- do.call(rbind, trial_rxcui_results)
-# print(trial_final_result)
-
-
-# Process each smaller dataframe using a loop
-for (i in seq_along(split_rxcui)) {
-  # Apply the function to the current dataframe
-  rxcui_results[[i]] <- map_newdrug_id(split_rxcui[[i]],"rxcui", "47")
-}
-
-# Combine the results if needed (optional, depends on function output)
-final_result <- do.call(rbind, rxcui_results)
-
-
-
-```
+Since the only mappings that could be done were for the IUPHAR and DrugBank drug identifiers, we have 
+to filter these out from the complete DGIdb database to avoid mapping Chembl ids to similar Drug ids that 
+are in a different drug id system/vocabulary. For instance RXCUI uses numerical ids but so does IUPHAR.
+They may have similar numerical ids for different drugs thus mistakes can be done when mapping.
+We may give RXCUI the wrong CHEMBL id if we map our CHEMBL ids without filtering out the appropriate drug identifier.
 
 ```{r}
+# filter out IUPHAR in the original DGIdb database,get rid of unnecessary columns,  merge the mapping df, get rid of NAs, and keep only unique rows
+iuphar_complete <- drugid_process %>% filter(drug_id_type == "iuphar.ligand") %>% 
+  left_join(iuphar_to_chembl, by= "drug_num") %>%
+  dplyr::select(-source_db_name,-drug_claim_name, -drug_id_type,-drug_num) %>% 
+  na.omit() %>% distinct()
 
+# do the same for drugbank
+drugbank_complete <- drugid_process %>% filter(drug_id_type == "drugbank") %>% 
+  left_join(drugbank_to_chembl, by= "drug_num") %>%
+  dplyr::select(-source_db_name,-drug_claim_name, -drug_id_type,-drug_num) %>% 
+  na.omit() %>% distinct()
+
+# now since there are chembl ids present in the original dataset, filter these out and process it as iuphar and drugbank but skip the merging part
+chembl_complete <- drugid_process  %>% filter(drug_id_type == "chembl") %>% 
+  dplyr::rename(chembl_drugid= drug_num) %>% 
+  dplyr::select(-source_db_name,-drug_claim_name, -drug_id_type) %>% 
+  na.omit() %>% distinct()
+
+# now bind the 3 dataframes and save it as a tsv
+final_drug_data <- rbind(chembl_complete, drugbank_complete, iuphar_complete) %>% distinct()
+
+# save as tsv and Rdata
+write_tsv(final_drug_data, "../data/processed/dgidb_final_drugdata.tsv")
+save(final_drug_data, file="../data/processed/dgidb_final_drugdata.RData")
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
