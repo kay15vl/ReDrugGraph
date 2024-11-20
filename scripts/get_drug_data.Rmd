@@ -249,7 +249,16 @@ map_drug_id <- function(drug_id,  source_id) {
 
 ### Filter df by drug id and map drug id
 ```{r}
-
+split_dataframe <- function(df, chunk_size) {
+  # Create a grouping factor based on row numbers
+  num_rows <- nrow(df)
+  group <- ceiling(seq_len(num_rows) / chunk_size)
+  
+  # Split the dataframe into a list of smaller dataframes
+  split_list <- split(df, group)
+  
+  return(split_list)
+}
 
 # Function to process drug IDs in chunks of 50
 process_drug_ids <- function(drug_ids, source_id, chunk_size = 50) {
@@ -309,12 +318,13 @@ process_drug_ids <- function(drug_ids, source_id, chunk_size = 50) {
 ### Process drug bank drug ids
 ```{r}
 
-df <- drugid_process
-drug_type <- "rxcui"
-source_num <- "47"
-filename <- "test.RData"
+# df <- drugid_process
+# drug_type <- "rxcui"
+# source_num <- "47"
+# filename <- "test.RData"
 map_newdrug_id <- function(df, drug_type, source_num){
-  druginfo_df <- df %>% filter(drug_id_type == drug_type)
+  druginfo_df <- df %>% filter(drug_id_type == drug_type) %>% 
+    dplyr::select(-source_db_name) %>% distinct()
   drug_ids <- as.list(druginfo_df$drug_num)
   olddrug_to_newdrug_id <-  process_drug_ids(drug_ids, source_num)
 }
@@ -323,22 +333,37 @@ map_newdrug_id <- function(df, drug_type, source_num){
 
 
 ```{r}
-#drugbank_df <- map_newdrug_id(drugid_process, "drugbank", "2", "../data/raw/drugbank_mapping.RData")
+
+drugbank_to_chembl <- map_newdrug_id(drugid_process, "drugbank", "2")
+save(drugbank_to_chembl, file =  "../data/raw/drugbank_mapping.RData") 
 ```
 
 
 
 ### Process iuphar
 ```{r}
-#iuphar_to_chembl <- map_newdrug_id(drugid_process, "iuphar.ligand", "4", "../data/raw/iuphar_mapping.RData")
-
+iuphar_to_chembl <- map_newdrug_id(drugid_process, "iuphar.ligand", "4")
+save(iuphar_to_chembl, file = "../data/raw/iuphar_mapping.RData") 
 ```
+
 
 ```{r}
-rxcui_to_chembl <- map_newdrug_id(drugid_process, "rxcui", "47", )
-save(rxcui_to_chembl, file = "../data/raw/rxcui_mapping.RData") 
+# rxcui_to_chembl <- map_newdrug_id(drugid_process, "rxcui", "47", )
+# save(rxcui_to_chembl, file = "../data/raw/rxcui_mapping.RData") 
 ```
 
+# Step 6: combine mapped drug data into one data frame and save as tsv
+```{r}
+
+
+```
+
+
+
+
+
+
+##### Still in progress below this heading ######
 
 ```{r}
 get_rxcui <- drugid_process %>% filter(drug_id_type== "rxcui")
