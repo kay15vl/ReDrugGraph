@@ -144,7 +144,7 @@ ancestor_info <- mclapply(terms, get_ances,mondo_ont) %>% bind_rows() %>%
 get_prop_genes <- mclapply(terms, propagate_genes, ancestor_info, final_disgenet) %>% 
   bind_rows() %>% unique() %>% setDT()
 
-final_prop_df <- bind_rows(final_disgenet, propagated_genes) %>% 
+final_prop_df <- bind_rows(final_disgenet, get_prop_genes) %>% 
   unique()
 
 write_tsv(final_prop_df, 
