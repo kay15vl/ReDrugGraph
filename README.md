@@ -3,7 +3,7 @@ Term project for Molecular Informatics (CSCI 5580)
 ## **Execute Scripts in this order**
 
 
-## **1. get_disgenes,Rmd**
+## **1. get_disgenes.Rmd**
 **Input**: Disease gene association data fromm DisGeNET and MONDO obo file.
 **Output**: Propagated genes associations for all collected DisGeNET data.
 
