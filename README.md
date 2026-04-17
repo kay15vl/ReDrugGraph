@@ -1,8 +1,25 @@
-# ReDrugGraph
-Term project for Molecular Informatics (CSCI 5580) 
+## Overview
+This project explores whether graph-based machine learning methods can be used to identify novel genes involved in the host response to tuberculosis and uncover potential drug targets.
+
+## Methods
+- Data: Disease–gene associations (DisGeNET), ontology data (MONDO), protein–protein interaction networks (BioGRID)
+- Approach:
+  - Constructed a bipartite disease–gene graph
+  - Applied a Graph Autoencoder (GAE) using a Graph Convolutional Network (GCN) encoder
+  - Performed link prediction to identify potential new disease–gene associations
+  - Ranked predicted associations using embedding similarity scores
+- Evaluation:
+  - Assessed model performance using AUC, average precision (AP), and ROC curves
+- Tools: Python, PyTorch, PyTorch Geometric, NetworkX
+
+## Key Insight
+The model generated a large set of candidate gene associations for tuberculosis, highlighting the potential of network-based approaches to expand gene sets for underrepresented diseases. However, extending this approach to drug–gene prediction revealed limitations in model performance, emphasizing the importance of data quality and representation.
+
+## Notes
+Completed as part of coursework in molecular informatics and inspired by prior research experience. This project reflects early experience building graph-based machine learning pipelines for biological data.
+*********************************************************************************************************************************************************************************************************************************************************************
+
 ## **Execute Scripts in this order**
-
-
 ## **1. get_disgenes.Rmd**
 **Input**: Disease gene association data fromm DisGeNET and MONDO obo file.
 **Output**: Propagated genes associations for all collected DisGeNET data.
